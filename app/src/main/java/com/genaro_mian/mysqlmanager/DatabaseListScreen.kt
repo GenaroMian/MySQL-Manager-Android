@@ -6,7 +6,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.Computer // <-- MUDANÇA (NOVO IMPORT)
+import androidx.compose.material.icons.filled.Computer
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -35,7 +35,7 @@ fun DatabaseListScreen(navController: NavController, conexaoId: Int) {
     var erro by remember { mutableStateOf<String?>(null) }
     var conexaoSalva by remember { mutableStateOf<ConexaoSalva?>(null) }
 
-    // LaunchedEffect (Sem alterações)
+    // LaunchedEffect (Com a mudança)
     LaunchedEffect(key1 = conexaoId) {
         scope.launch(Dispatchers.IO) {
             val conexao = conexaoDao.getConexaoPeloId(conexaoId)
@@ -51,7 +51,6 @@ fun DatabaseListScreen(navController: NavController, conexaoId: Int) {
 
             var connection: Connection? = null
             try {
-                // Conecta sem dbName (correto)
                 connection = connectToMySQL(
                     url = conexao.url,
                     port = conexao.port,
@@ -63,13 +62,32 @@ fun DatabaseListScreen(navController: NavController, conexaoId: Int) {
                 val statement = connection.createStatement()
                 val resultSet = statement.executeQuery("SHOW DATABASES;")
 
+                // 1. A lista completa (incluindo bancos de sistema)
                 val dbs = mutableListOf<String>()
                 while (resultSet.next()) {
                     dbs.add(resultSet.getString(1))
                 }
 
+                // **MUDANÇA AQUI: A LÓGICA DE FILTRAGEM**
+                // 2. A "lista negra" de bancos de sistema
+                val systemDatabases = setOf(
+                    "information_schema",
+                    "mysql",
+                    "performance_schema",
+                    "sys",
+                    "sakila",
+                    "world"
+                )
+
+                // 3. Cria a nova lista filtrada
+                // (Compara em minúsculas para garantir)
+                val filteredDbs = dbs.filterNot { dbName ->
+                    dbName.lowercase() in systemDatabases
+                }
+
+                // 4. Envia a lista FILTRADA para a UI
                 withContext(Dispatchers.Main) {
-                    databaseNames = dbs
+                    databaseNames = filteredDbs
                     isLoading = false
                 }
 
@@ -104,12 +122,9 @@ fun DatabaseListScreen(navController: NavController, conexaoId: Int) {
             )
         },
 
-        // **MUDANÇA (NOVO FAB ADICIONADO)**
         floatingActionButton = {
             FloatingActionButton(
                 onClick = {
-                    // Navega para o terminal, sem passar o dbName
-                    // (Isto funciona por causa da Rota 6 que atualizamos)
                     navController.navigate("terminal_screen/${conexaoId}")
                 }
             ) {
