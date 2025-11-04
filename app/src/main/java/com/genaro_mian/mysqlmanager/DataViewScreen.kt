@@ -7,7 +7,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.Computer // <-- MUDANÇA (NOVO IMPORT)
+import androidx.compose.material.icons.filled.Computer
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -23,8 +23,6 @@ import kotlinx.coroutines.withContext
 import java.sql.Connection
 import java.sql.DriverManager
 
-// A data class 'QueryResult' agora está no seu arquivo Models.kt
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DataViewScreen(
@@ -37,13 +35,11 @@ fun DataViewScreen(
     val scope = rememberCoroutineScope()
     val conexaoDao = AppDatabase.getDatabase(context).conexaoDao()
 
-    // Estados da tela
     var isLoading by remember { mutableStateOf(true) }
     var queryResult by remember { mutableStateOf<QueryResult>(QueryResult()) }
     var erro by remember { mutableStateOf<String?>(null) }
     var conexaoSalva by remember { mutableStateOf<ConexaoSalva?>(null) }
 
-    // LaunchedEffect (Sem alterações)
     LaunchedEffect(key1 = conexaoId, key2 = dbName, key3 = tableName) {
         scope.launch(Dispatchers.IO) {
             val conexao = conexaoDao.getConexaoPeloId(conexaoId)
@@ -62,7 +58,7 @@ fun DataViewScreen(
                 connection = connectToMySQL(
                     url = conexao.url,
                     port = conexao.port,
-                    dbName = dbName, // Com dbName
+                    dbName = dbName,
                     user = conexao.user,
                     pass = conexao.pass
                 )
@@ -118,13 +114,9 @@ fun DataViewScreen(
                 }
             )
         },
-
-        // **MUDANÇA (NOVO FAB ADICIONADO)**
         floatingActionButton = {
             FloatingActionButton(
                 onClick = {
-                    // Navega para o terminal, passando o dbName
-                    // (Isto funciona por causa da Rota 6 que atualizamos)
                     navController.navigate("terminal_screen/${conexaoId}?dbName=${dbName}")
                 }
             ) {
@@ -134,7 +126,6 @@ fun DataViewScreen(
                 )
             }
         },
-
         content = { innerPadding ->
             Box(
                 modifier = Modifier
@@ -150,7 +141,6 @@ fun DataViewScreen(
                         color = MaterialTheme.colorScheme.error
                     )
                 } else {
-                    // A grade de dados
                     Box(modifier = Modifier
                         .fillMaxSize()
                         .horizontalScroll(rememberScrollState())) {
@@ -169,7 +159,8 @@ fun DataViewScreen(
                                         Text(
                                             text = columnName,
                                             fontWeight = FontWeight.Bold,
-                                            modifier = Modifier.widthIn(min = 100.dp)
+                                            // **A CORREÇÃO ESTÁ AQUI**
+                                            modifier = Modifier.width(150.dp)
                                         )
                                     }
                                 }
@@ -187,7 +178,8 @@ fun DataViewScreen(
                                     rowData.forEach { cellData ->
                                         Text(
                                             text = cellData,
-                                            modifier = Modifier.widthIn(min = 100.dp)
+                                            // **E AQUI**
+                                            modifier = Modifier.width(150.dp)
                                         )
                                     }
                                 }

@@ -106,7 +106,7 @@ private fun sqlSyntaxHighlighterWithUppercase(): VisualTransformation {
 }
 
 
-// --- A TELA DO TERMINAL (Com Indentação Persistente) ---
+// --- A TELA DO TERMINAL (Sem alterações, exceto no DataTable) ---
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TerminalScreen(
@@ -241,8 +241,6 @@ fun TerminalScreen(
             // 2. O EDITOR DE TEXTO REAL
             BasicTextField(
                 value = sqlQuery,
-
-                // **LÓGICA DE AUTO-INDENTAÇÃO ATUALIZADA**
                 onValueChange = { newValue ->
                     val oldText = sqlQuery.text
                     val newText = newValue.text
@@ -266,7 +264,6 @@ fun TerminalScreen(
                     }
 
                     // Caso 2: Auto-indentar com "Enter"
-                    // Verifica se um '\n' foi adicionado
                     if (newText.length > oldText.length && newText.count { it == '\n' } > oldText.count { it == '\n' }) {
                         val enterIndex = newValue.selection.start - 1
                         if (enterIndex >= 0) {
@@ -274,8 +271,8 @@ fun TerminalScreen(
                             val lineText = oldText.substring(lineStartIndex, enterIndex)
                             val charBeforeEnter = lineText.trimEnd().lastOrNull()
 
-                            val textBefore = newText.substring(0, newValue.selection.start) // ex: "comandos(\n"
-                            val textAfter = newText.substring(newValue.selection.start)  // ex: ")"
+                            val textBefore = newText.substring(0, newValue.selection.start)
+                            val textAfter = newText.substring(newValue.selection.start)
 
                             // 2a: Indentação "Sanduíche"
                             if (charBeforeEnter == '(') {
@@ -290,7 +287,7 @@ fun TerminalScreen(
                                 return@BasicTextField
                             }
 
-                            // 2b: Indentação "Persistente" (A NOVA LÓGICA)
+                            // 2b: Indentação "Persistente"
                             val currentIndentation = lineText.takeWhile { it.isWhitespace() }
                             if (currentIndentation.isNotEmpty()) {
                                 val finalText = textBefore + currentIndentation + textAfter
@@ -305,7 +302,7 @@ fun TerminalScreen(
                         }
                     }
 
-                    // Caso 3: Padrão (apenas aceita a mudança)
+                    // Caso 3: Padrão
                     sqlQuery = newValue
                 },
 
@@ -317,7 +314,7 @@ fun TerminalScreen(
             )
         }
 
-        // Gavetas de Resultados (Sem alterações)
+        // Gavetas de Resultados (Sem alterações, exceto o DataTable)
         if (showResultSheet) {
             ModalBottomSheet(onDismissRequest = { showResultSheet = false }) {
                 Text("Resultados do SELECT", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(16.dp))
@@ -377,13 +374,15 @@ private suspend fun executeGenericQuery(
     }
 }
 
-// --- UI DA TABELA (Sem alterações) ---
+// --- UI DA TABELA (Com a correção) ---
 @Composable
 private fun DataTable(result: QueryResult) {
     Box(modifier = Modifier
         .fillMaxSize()
         .horizontalScroll(rememberScrollState())) {
         LazyColumn(modifier = Modifier.fillMaxSize()) {
+
+            // Item 1: O Cabeçalho (Colunas)
             item {
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(8.dp),
@@ -393,12 +392,15 @@ private fun DataTable(result: QueryResult) {
                         Text(
                             text = columnName,
                             fontWeight = FontWeight.Bold,
-                            modifier = Modifier.widthIn(min = 100.dp)
+                            // **A CORREÇÃO ESTÁ AQUI**
+                            modifier = Modifier.width(150.dp)
                         )
                     }
                 }
                 Divider(color = Color.Black, thickness = 2.dp)
             }
+
+            // Itens 2...N: As Linhas de Dados
             items(result.rows) { rowData ->
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(8.dp),
@@ -407,7 +409,8 @@ private fun DataTable(result: QueryResult) {
                     rowData.forEach { cellData ->
                         Text(
                             text = cellData,
-                            modifier = Modifier.widthIn(min = 100.dp)
+                            // **E AQUI**
+                            modifier = Modifier.width(150.dp)
                         )
                     }
                 }
