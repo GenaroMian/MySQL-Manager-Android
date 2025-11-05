@@ -1,7 +1,10 @@
 package com.genaro_mian.mysqlmanager // (Seu pacote)
 
 import android.app.Application
+import android.content.Intent // <-- NOVO IMPORT
+import android.net.Uri // <-- NOVO IMPORT
 import android.os.Bundle
+import android.widget.Toast // (Já existia no DataViewScreen, mas bom ter aqui)
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -13,6 +16,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Info // <-- NOVO IMPORT
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -36,7 +40,7 @@ class MainActivity : ComponentActivity() {
             MySqlManagerTheme {
                 val navController = rememberNavController()
 
-                // --- O MAPA DE NAVEGAÇÃO COMPLETO ---
+                // O NavHost (mapa) está correto, com todas as 6 rotas
                 NavHost(
                     navController = navController,
                     startDestination = "main_screen"
@@ -119,27 +123,22 @@ class MainActivity : ComponentActivity() {
                         }
                     }
 
-                    // **MUDANÇA AQUI**
-                    // Rota 6: O Terminal (dbName agora é OPCIONAL)
+                    // Rota 6: O Terminal (dbName opcional)
                     composable(
-                        // A rota agora é "...?dbName={dbName}" (opcional)
                         route = "terminal_screen/{conexaoId}?dbName={dbName}",
                         arguments = listOf(
                             navArgument("conexaoId") { type = NavType.IntType },
                             navArgument("dbName") {
                                 type = NavType.StringType
-                                nullable = true // Permite que seja nulo
+                                nullable = true
                                 defaultValue = null
                             }
                         )
                     ) { backStackEntry ->
-                        // 1. Pega o ID
                         val id = backStackEntry.arguments?.getInt("conexaoId")
-                        // 2. Pega o dbName (se for nulo, transforma em string vazia)
                         val nomeDoBanco = backStackEntry.arguments?.getString("dbName") ?: ""
 
                         if (id != null) {
-                            // 3. Passa os argumentos para a nova tela
                             TerminalScreen(
                                 navController = navController,
                                 conexaoId = id,
@@ -155,20 +154,29 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-// --- TELA PRINCIPAL (Sem alterações) ---
+// --- TELA PRINCIPAL (Com Menu de Privacidade) ---
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun MainScreen(navController: NavController) {
 
+    // 1. Pegar o ViewModel
     val context = LocalContext.current
     val viewModel: MainViewModel = viewModel(
         factory = MainViewModelFactory(context.applicationContext as Application)
     )
+
+    // 2. Pegar a lista de conexões do ViewModel
     val conexoes by viewModel.conexoes.collectAsState(initial = emptyList())
 
+    // 3. Estados para os Menus e Diálogos
+    var showMenu by remember { mutableStateOf(false) } // <-- PARA O MENU DA TOPBAR
     var showDropdownMenu by remember { mutableStateOf(false) }
     var showDeleteDialog by remember { mutableStateOf(false) }
     var conexaoSelecionada by remember { mutableStateOf<ConexaoSalva?>(null) }
+
+    // 4. O seu link
+    val privacyPolicyUrl = "https://docs.google.com/document/d/1E2d-PvxIGVy9KTmB8gmpifxxYBQt2QcbWzuyWmtrBIw/edit?usp=sharing"
+
 
     Scaffold(
         topBar = {
@@ -178,13 +186,39 @@ fun MainScreen(navController: NavController) {
                     containerColor = MaterialTheme.colorScheme.primary,
                     titleContentColor = MaterialTheme.colorScheme.onPrimary
                 ),
+                // **MUDANÇA AQUI: LÓGICA DO MENU DA TOPBAR**
                 actions = {
-                    IconButton(onClick = { /* TODO: Lógica do menu */ }) {
+                    // 1. O Botão (Três Pontos)
+                    IconButton(onClick = { showMenu = true }) { // <-- Abre o menu
                         Icon(
                             imageVector = Icons.Default.MoreVert,
                             contentDescription = "Menu",
                             tint = MaterialTheme.colorScheme.onPrimary
                         )
+                    }
+
+                    // 2. O Menu Flutuante (ancorado ao IconButton)
+                    DropdownMenu(
+                        expanded = showMenu,
+                        onDismissRequest = { showMenu = false }
+                    ) {
+                        // 3. O Item da Política de Privacidade
+                        DropdownMenuItem(
+                            text = { Text("Política de Privacidade") },
+                            leadingIcon = { Icon(Icons.Default.Info, contentDescription = null) },
+                            onClick = {
+                                showMenu = false // Fecha o menu
+                                // Cria e lança o Intent para abrir o browser
+                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(privacyPolicyUrl))
+                                try {
+                                    context.startActivity(intent)
+                                } catch (e: Exception) {
+                                    // Se o usuário não tiver um browser (raro)
+                                    Toast.makeText(context, "Não foi possível abrir o link", Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        )
+                        // (Pode adicionar mais itens aqui, como "Sobre")
                     }
                 }
             )
@@ -208,6 +242,7 @@ fun MainScreen(navController: NavController) {
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
+            // LazyColumn (sem alterações)
             if (conexoes.isEmpty()) {
                 Text(text = "Nenhuma conexão salva.", modifier = Modifier.padding(16.dp))
             } else {
@@ -230,6 +265,7 @@ fun MainScreen(navController: NavController) {
                                 )
                             )
 
+                            // DropdownMenu do "Editar/Excluir" (sem alterações)
                             DropdownMenu(
                                 expanded = showDropdownMenu && conexaoSelecionada?.id == conexao.id,
                                 onDismissRequest = { showDropdownMenu = false }
@@ -257,6 +293,7 @@ fun MainScreen(navController: NavController) {
                 }
             }
 
+            // AlertDialog do "Excluir" (sem alterações)
             if (showDeleteDialog) {
                 AlertDialog(
                     onDismissRequest = {

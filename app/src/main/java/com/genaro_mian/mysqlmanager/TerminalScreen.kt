@@ -106,7 +106,7 @@ private fun sqlSyntaxHighlighterWithUppercase(): VisualTransformation {
 }
 
 
-// --- A TELA DO TERMINAL (Sem alterações, exceto no DataTable) ---
+// --- A TELA DO TERMINAL (Com Correção de "Colar") ---
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TerminalScreen(
@@ -241,25 +241,37 @@ fun TerminalScreen(
             // 2. O EDITOR DE TEXTO REAL
             BasicTextField(
                 value = sqlQuery,
+
+                // **MUDANÇA AQUI: LÓGICA DE "COLAR" CORRIGIDA**
                 onValueChange = { newValue ->
                     val oldText = sqlQuery.text
                     val newText = newValue.text
 
+                    // **A CORREÇÃO (GUARDA):**
+                    // Se a mudança NÃO foi de 1 carácter (é uma colagem ou deleção),
+                    // apenas aceite o novo valor e não faça a "magia".
+                    if (newText.length != oldText.length + 1) {
+                        sqlQuery = newValue
+                        return@BasicTextField
+                    }
+
+                    // Se chegámos aqui, foi uma digitação de 1 carácter.
+                    // Podemos fazer a nossa "magia" de auto-completar:
+
+                    val typedCharIndex = newValue.selection.start - 1
+
                     // Caso 1: Auto-completar parênteses
-                    if (newText.length > oldText.length) {
-                        val typedCharIndex = newValue.selection.start - 1
-                        if (typedCharIndex >= 0) {
-                            val typedChar = newText[typedCharIndex]
-                            if (typedChar == '(') {
-                                val textBefore = newText.substring(0, newValue.selection.start)
-                                val textAfter = newText.substring(newValue.selection.start)
-                                val finalText = textBefore + ")" + textAfter
-                                sqlQuery = newValue.copy(
-                                    text = finalText,
-                                    selection = TextRange(newValue.selection.start)
-                                )
-                                return@BasicTextField
-                            }
+                    if (typedCharIndex >= 0) {
+                        val typedChar = newText[typedCharIndex]
+                        if (typedChar == '(') {
+                            val textBefore = newText.substring(0, newValue.selection.start)
+                            val textAfter = newText.substring(newValue.selection.start)
+                            val finalText = textBefore + ")" + textAfter
+                            sqlQuery = newValue.copy(
+                                text = finalText,
+                                selection = TextRange(newValue.selection.start)
+                            )
+                            return@BasicTextField
                         }
                     }
 
@@ -302,7 +314,7 @@ fun TerminalScreen(
                         }
                     }
 
-                    // Caso 3: Padrão
+                    // Caso 3: Padrão (apenas aceita a mudança)
                     sqlQuery = newValue
                 },
 
@@ -314,7 +326,7 @@ fun TerminalScreen(
             )
         }
 
-        // Gavetas de Resultados (Sem alterações, exceto o DataTable)
+        // Gavetas de Resultados (Sem alterações)
         if (showResultSheet) {
             ModalBottomSheet(onDismissRequest = { showResultSheet = false }) {
                 Text("Resultados do SELECT", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(16.dp))
@@ -374,15 +386,13 @@ private suspend fun executeGenericQuery(
     }
 }
 
-// --- UI DA TABELA (Com a correção) ---
+// --- UI DA TABELA (Sem alterações) ---
 @Composable
 private fun DataTable(result: QueryResult) {
     Box(modifier = Modifier
         .fillMaxSize()
         .horizontalScroll(rememberScrollState())) {
         LazyColumn(modifier = Modifier.fillMaxSize()) {
-
-            // Item 1: O Cabeçalho (Colunas)
             item {
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(8.dp),
@@ -392,15 +402,12 @@ private fun DataTable(result: QueryResult) {
                         Text(
                             text = columnName,
                             fontWeight = FontWeight.Bold,
-                            // **A CORREÇÃO ESTÁ AQUI**
                             modifier = Modifier.width(150.dp)
                         )
                     }
                 }
                 Divider(color = Color.Black, thickness = 2.dp)
             }
-
-            // Itens 2...N: As Linhas de Dados
             items(result.rows) { rowData ->
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(8.dp),
@@ -409,7 +416,6 @@ private fun DataTable(result: QueryResult) {
                     rowData.forEach { cellData ->
                         Text(
                             text = cellData,
-                            // **E AQUI**
                             modifier = Modifier.width(150.dp)
                         )
                     }
