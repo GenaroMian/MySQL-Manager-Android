@@ -7,21 +7,36 @@ import android.os.Bundle
 import android.widget.Toast // (Já existia no DataViewScreen, mas bom ter aqui)
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Info // <-- NOVO IMPORT
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -31,6 +46,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.genaro_mian.mysqlmanager.ui.theme.BlueGradient
 import com.genaro_mian.mysqlmanager.ui.theme.MySqlManagerTheme
 
 class MainActivity : ComponentActivity() {
@@ -158,156 +174,210 @@ class MainActivity : ComponentActivity() {
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun MainScreen(navController: NavController) {
-
-    // 1. Pegar o ViewModel
     val context = LocalContext.current
     val viewModel: MainViewModel = viewModel(
         factory = MainViewModelFactory(context.applicationContext as Application)
     )
 
-    // 2. Pegar a lista de conexões do ViewModel
     val conexoes by viewModel.conexoes.collectAsState(initial = emptyList())
-
-    // 3. Estados para os Menus e Diálogos
-    var showMenu by remember { mutableStateOf(false) } // <-- PARA O MENU DA TOPBAR
+    var showMenu by remember { mutableStateOf(false) }
     var showDropdownMenu by remember { mutableStateOf(false) }
     var showDeleteDialog by remember { mutableStateOf(false) }
     var conexaoSelecionada by remember { mutableStateOf<ConexaoSalva?>(null) }
 
-    // 4. O seu link
-    val privacyPolicyUrl = "https://docs.google.com/document/d/1E2d-PvxIGVy9KTmB8gmpifxxYBQt2QcbWzuyWmtrBIw/edit?usp=sharing"
-
+    val privacyPolicyUrl =
+        "https://docs.google.com/document/d/1E2d-PvxIGVy9KTmB8gmpifxxYBQt2QcbWzuyWmtrBIw/edit?usp=sharing"
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("MySQL Manager") },
+                title = {
+                    Text(
+                        "MySQL Manager",
+                        style = MaterialTheme.typography.titleLarge.copy(color = MaterialTheme.colorScheme.onPrimary)
+                    )
+                },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    titleContentColor = MaterialTheme.colorScheme.onPrimary
+                    containerColor = Color.Transparent,
+                    scrolledContainerColor = MaterialTheme.colorScheme.primary
                 ),
-                // **MUDANÇA AQUI: LÓGICA DO MENU DA TOPBAR**
+                modifier = Modifier.background(BlueGradient),
                 actions = {
-                    // 1. O Botão (Três Pontos)
-                    IconButton(onClick = { showMenu = true }) { // <-- Abre o menu
+                    IconButton(onClick = { showMenu = true }) {
                         Icon(
-                            imageVector = Icons.Default.MoreVert,
+                            Icons.Default.MoreVert,
                             contentDescription = "Menu",
                             tint = MaterialTheme.colorScheme.onPrimary
                         )
                     }
-
-                    // 2. O Menu Flutuante (ancorado ao IconButton)
                     DropdownMenu(
                         expanded = showMenu,
                         onDismissRequest = { showMenu = false }
                     ) {
-                        // 3. O Item da Política de Privacidade
                         DropdownMenuItem(
                             text = { Text("Política de Privacidade") },
-                            leadingIcon = { Icon(Icons.Default.Info, contentDescription = null) },
+                            leadingIcon = { Icon(Icons.Default.Info, null) },
                             onClick = {
-                                showMenu = false // Fecha o menu
-                                // Cria e lança o Intent para abrir o browser
-                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(privacyPolicyUrl))
+                                showMenu = false
                                 try {
+                                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(privacyPolicyUrl))
                                     context.startActivity(intent)
-                                } catch (e: Exception) {
-                                    // Se o usuário não tiver um browser (raro)
-                                    Toast.makeText(context, "Não foi possível abrir o link", Toast.LENGTH_SHORT).show()
+                                } catch (_: Exception) {
+                                    Toast.makeText(
+                                        context,
+                                        "Não foi possível abrir o link",
+                                        Toast.LENGTH_SHORT
+                                    ).show()
                                 }
                             }
                         )
-                        // (Pode adicionar mais itens aqui, como "Sobre")
                     }
                 }
             )
         },
         floatingActionButton = {
-            FloatingActionButton(
-                onClick = {
-                    navController.navigate("new_connection_screen")
-                }
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Add,
-                    contentDescription = "Adicionar Conexão"
-                )
-            }
+            ExtendedFloatingActionButton(
+                onClick = { navController.navigate("new_connection_screen") },
+                text = { Text("Nova conexão") },
+                icon = { Icon(Icons.Default.Add, null) },
+                containerColor = MaterialTheme.colorScheme.secondary,
+                contentColor = MaterialTheme.colorScheme.onSecondary,
+                modifier = Modifier.padding(12.dp)
+            )
         }
     ) { innerPadding ->
-
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
+                .background(MaterialTheme.colorScheme.background)
         ) {
-            // LazyColumn (sem alterações)
             if (conexoes.isEmpty()) {
-                Text(text = "Nenhuma conexão salva.", modifier = Modifier.padding(16.dp))
+                // Estado vazio
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(32.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Info,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(72.dp)
+                    )
+                    Text(
+                        "Nenhuma conexão salva",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        "Toque em “Nova conexão” para criar uma.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             } else {
                 LazyColumn(
-                    modifier = Modifier.fillMaxSize()
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 12.dp)
                 ) {
-                    items(conexoes) { conexao ->
-                        Box {
-                            ListItem(
-                                headlineContent = { Text(conexao.alias) },
-                                supportingContent = { Text("${conexao.user}@${conexao.url}") },
-                                modifier = Modifier.combinedClickable(
-                                    onClick = {
-                                        navController.navigate("database_list_screen/${conexao.id}")
-                                    },
-                                    onLongClick = {
-                                        conexaoSelecionada = conexao
-                                        showDropdownMenu = true
-                                    }
-                                )
-                            )
-
-                            // DropdownMenu do "Editar/Excluir" (sem alterações)
-                            DropdownMenu(
-                                expanded = showDropdownMenu && conexaoSelecionada?.id == conexao.id,
-                                onDismissRequest = { showDropdownMenu = false }
+                    items(conexoes, key = { it.id }) { conexao ->
+                        AnimatedVisibility(
+                            visible = true,
+                            enter = fadeIn() + slideInVertically(),
+                            exit = fadeOut()
+                        ) {
+                            ElevatedCard(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 6.dp)
+                                    .combinedClickable(
+                                        onClick = {
+                                            navController.navigate("database_list_screen/${conexao.id}")
+                                        },
+                                        onLongClick = {
+                                            conexaoSelecionada = conexao
+                                            showDropdownMenu = true
+                                        }
+                                    ),
+                                shape = RoundedCornerShape(16.dp),
+                                elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
                             ) {
-                                DropdownMenuItem(
-                                    text = { Text("Editar") },
-                                    onClick = {
-                                        showDropdownMenu = false
-                                        navController.navigate(
-                                            "new_connection_screen?id=${conexao.id}"
+                                Row(
+                                    modifier = Modifier
+                                        .padding(16.dp)
+                                        .fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    // Ícone DB redimensionado
+                                    Icon(
+                                        painter = painterResource(id = R.drawable.ic_database_3d),
+                                        contentDescription = "Banco de Dados",
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier
+                                            .size(40.dp)
+                                            .padding(end = 12.dp)
+                                    )
+
+
+
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = conexao.alias,
+                                            style = MaterialTheme.typography.titleMedium,
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                        Text(
+                                            text = "${conexao.user}@${conexao.url}",
+                                            style = MaterialTheme.typography.bodySmall.copy(
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            ),
+                                            maxLines = 1
                                         )
                                     }
-                                )
-                                DropdownMenuItem(
-                                    text = { Text("Excluir") },
-                                    onClick = {
-                                        showDropdownMenu = false
-                                        showDeleteDialog = true
-                                    }
-                                )
+                                }
                             }
                         }
-                        Divider()
+
+                        DropdownMenu(
+                            expanded = showDropdownMenu && conexaoSelecionada?.id == conexao.id,
+                            onDismissRequest = { showDropdownMenu = false }
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("Editar conexão") },
+                                onClick = {
+                                    showDropdownMenu = false
+                                    navController.navigate("new_connection_screen?id=${conexao.id}")
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Excluir") },
+                                onClick = {
+                                    showDropdownMenu = false
+                                    showDeleteDialog = true
+                                }
+                            )
+                        }
                     }
+
                 }
             }
 
-            // AlertDialog do "Excluir" (sem alterações)
             if (showDeleteDialog) {
                 AlertDialog(
-                    onDismissRequest = {
-                        showDeleteDialog = false
-                    },
+                    onDismissRequest = { showDeleteDialog = false },
+                    icon = { Icon(Icons.Default.Info, null) },
                     title = { Text("Excluir Conexão") },
-                    text = { Text("Tem certeza que quer excluir \"${conexaoSelecionada?.alias}\"?") },
-
+                    text = {
+                        Text("Tem certeza que deseja excluir \"${conexaoSelecionada?.alias}\"?")
+                    },
                     confirmButton = {
                         Button(
                             onClick = {
-                                conexaoSelecionada?.let {
-                                    viewModel.deletarConexao(it)
-                                }
+                                conexaoSelecionada?.let { viewModel.deletarConexao(it) }
                                 showDeleteDialog = false
                             },
                             colors = ButtonDefaults.buttonColors(
@@ -317,13 +387,8 @@ fun MainScreen(navController: NavController) {
                             Text("Excluir")
                         }
                     },
-
                     dismissButton = {
-                        TextButton(
-                            onClick = {
-                                showDeleteDialog = false
-                            }
-                        ) {
+                        TextButton(onClick = { showDeleteDialog = false }) {
                             Text("Cancelar")
                         }
                     }
@@ -332,6 +397,8 @@ fun MainScreen(navController: NavController) {
         }
     }
 }
+
+
 
 // Preview (Sem alterações)
 @Preview(showBackground = true)

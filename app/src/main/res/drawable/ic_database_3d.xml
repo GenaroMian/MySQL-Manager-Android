@@ -1,0 +1,33 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp"
+    android:height="48dp"
+    android:viewportWidth="48"
+    android:viewportHeight="48">
+
+    <!-- Base inferior -->
+    <path
+        android:fillColor="#000000"
+        android:fillAlpha="0.25"
+        android:pathData="M24,38c-8,0 -14,-2 -14,-4v3c0,2 6,4 14,4s14,-2 14,-4v-3c0,2 -6,4 -14,4z"/>
+
+    <!-- Corpo do cilindro -->
+    <path
+        android:fillColor="#2A8CF7"
+        android:pathData="M24,10c-8,0 -14,2 -14,4v18c0,2 6,4 14,4s14,-2 14,-4V14C38,12 32,10 24,10z"/>
+
+    <!-- Faixas intermediárias (sombreamento) -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:fillAlpha="0.15"
+        android:pathData="M24,10c-8,0 -14,2 -14,4 0,2 6,4 14,4s14,-2 14,-4C38,12 32,10 24,10z"/>
+    <path
+        android:fillColor="#FFFFFF"
+        android:fillAlpha="0.08"
+        android:pathData="M24,22c-8,0 -14,2 -14,4 0,2 6,4 14,4s14,-2 14,-4C38,24 32,22 24,22z"/>
+
+    <!-- Borda superior com brilho -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:fillAlpha="0.25"
+        android:pathData="M24,10c8,0 14,2 14,4s-6,4 -14,4 -14,-2 -14,-4S16,10 24,10z"/>
+</vector>

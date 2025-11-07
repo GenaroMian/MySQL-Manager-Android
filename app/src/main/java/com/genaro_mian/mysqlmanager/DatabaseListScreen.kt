@@ -7,6 +7,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Computer
+import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -29,14 +30,13 @@ fun DatabaseListScreen(navController: NavController, conexaoId: Int) {
     val scope = rememberCoroutineScope()
     val conexaoDao = AppDatabase.getDatabase(context).conexaoDao()
 
-    // Estados da tela
     var isLoading by remember { mutableStateOf(true) }
     var databaseNames by remember { mutableStateOf<List<String>>(emptyList()) }
     var erro by remember { mutableStateOf<String?>(null) }
     var conexaoSalva by remember { mutableStateOf<ConexaoSalva?>(null) }
 
-    // LaunchedEffect (Com a mudança)
-    LaunchedEffect(key1 = conexaoId) {
+    // Carregar bancos da conexão
+    LaunchedEffect(conexaoId) {
         scope.launch(Dispatchers.IO) {
             val conexao = conexaoDao.getConexaoPeloId(conexaoId)
             conexaoSalva = conexao
@@ -51,48 +51,20 @@ fun DatabaseListScreen(navController: NavController, conexaoId: Int) {
 
             var connection: Connection? = null
             try {
-                connection = connectToMySQL(
-                    url = conexao.url,
-                    port = conexao.port,
-                    dbName = "",
-                    user = conexao.user,
-                    pass = conexao.pass
-                )
+                connection = connectToMySQL(conexao.url, conexao.port, "", conexao.user, conexao.pass)
+                val result = connection.createStatement().executeQuery("SHOW DATABASES;")
 
-                val statement = connection.createStatement()
-                val resultSet = statement.executeQuery("SHOW DATABASES;")
+                val allDbs = mutableListOf<String>()
+                while (result.next()) allDbs.add(result.getString(1))
 
-                // 1. A lista completa (incluindo bancos de sistema)
-                val dbs = mutableListOf<String>()
-                while (resultSet.next()) {
-                    dbs.add(resultSet.getString(1))
-                }
+                val systemDbs = setOf("information_schema", "mysql", "performance_schema", "sys", "sakila", "world")
+                val filtered = allDbs.filterNot { it.lowercase() in systemDbs }
 
-                // **MUDANÇA AQUI: A LÓGICA DE FILTRAGEM**
-                // 2. A "lista negra" de bancos de sistema
-                val systemDatabases = setOf(
-                    "information_schema",
-                    "mysql",
-                    "performance_schema",
-                    "sys",
-                    "sakila",
-                    "world"
-                )
-
-                // 3. Cria a nova lista filtrada
-                // (Compara em minúsculas para garantir)
-                val filteredDbs = dbs.filterNot { dbName ->
-                    dbName.lowercase() in systemDatabases
-                }
-
-                // 4. Envia a lista FILTRADA para a UI
                 withContext(Dispatchers.Main) {
-                    databaseNames = filteredDbs
+                    databaseNames = filtered
                     isLoading = false
                 }
-
             } catch (e: Exception) {
-                e.printStackTrace()
                 withContext(Dispatchers.Main) {
                     erro = "Erro de conexão: ${e.message}"
                     isLoading = false
@@ -106,59 +78,136 @@ fun DatabaseListScreen(navController: NavController, conexaoId: Int) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(conexaoSalva?.alias ?: "Carregando...") },
+                title = {
+                    Column {
+                        Text(conexaoSalva?.alias ?: "Conexão MySQL", style = MaterialTheme.typography.titleLarge)
+                        if (conexaoSalva != null)
+                            Text(
+                                "${conexaoSalva!!.user}@${conexaoSalva!!.url}:${conexaoSalva!!.port}",
+                                style = MaterialTheme.typography.bodySmall.copy(
+                                    color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.8f)
+                                )
+                            )
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.primary,
                     titleContentColor = MaterialTheme.colorScheme.onPrimary
                 ),
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(
-                            Icons.Default.ArrowBack, "Voltar",
-                            tint = MaterialTheme.colorScheme.onPrimary
-                        )
+                        Icon(Icons.Default.ArrowBack, contentDescription = "Voltar", tint = MaterialTheme.colorScheme.onPrimary)
                     }
                 }
             )
         },
-
         floatingActionButton = {
-            FloatingActionButton(
-                onClick = {
-                    navController.navigate("terminal_screen/${conexaoId}")
-                }
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Computer,
-                    contentDescription = "Abrir Terminal"
-                )
-            }
+            ExtendedFloatingActionButton(
+                onClick = { navController.navigate("terminal_screen/${conexaoId}") },
+                icon = { Icon(Icons.Default.Computer, contentDescription = null) },
+                text = { Text("Terminal SQL") },
+                containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+            )
         }
-
     ) { innerPadding ->
+
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
+                .padding(horizontal = 12.dp)
         ) {
-            if (isLoading) {
-                CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
-            } else if (erro != null) {
-                Text(
-                    text = erro!!,
-                    modifier = Modifier.padding(16.dp),
-                    color = MaterialTheme.colorScheme.error
-                )
-            } else {
-                LazyColumn(modifier = Modifier.fillMaxSize()) {
-                    items(databaseNames) { dbName ->
-                        ListItem(
-                            headlineContent = { Text(dbName) },
-                            modifier = Modifier.clickable {
-                                navController.navigate("table_list_screen/${conexaoId}/$dbName")
-                            }
+            when {
+                isLoading -> {
+                    Column(
+                        modifier = Modifier.fillMaxSize(),
+                        verticalArrangement = Arrangement.Center,
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        CircularProgressIndicator()
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text("Carregando bancos de dados...", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+
+                erro != null -> {
+                    Column(
+                        modifier = Modifier.fillMaxSize(),
+                        verticalArrangement = Arrangement.Center,
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Computer,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.size(64.dp)
                         )
-                        Divider()
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text(
+                            erro!!,
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.titleMedium
+                        )
+                    }
+                }
+
+                databaseNames.isEmpty() -> {
+                    Column(
+                        modifier = Modifier.fillMaxSize(),
+                        verticalArrangement = Arrangement.Center,
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Storage,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(72.dp)
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text("Nenhum banco de dados encontrado", style = MaterialTheme.typography.titleMedium)
+                        Text("Crie um novo banco pelo terminal SQL.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+
+                else -> {
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(top = 8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        items(databaseNames) { dbName ->
+                            ElevatedCard(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        navController.navigate("table_list_screen/${conexaoId}/$dbName")
+                                    },
+                                elevation = CardDefaults.cardElevation(defaultElevation = 3.dp),
+                                shape = MaterialTheme.shapes.medium
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .padding(16.dp)
+                                        .fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Storage,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier
+                                            .size(32.dp)
+                                            .padding(end = 12.dp)
+                                    )
+                                    Column {
+                                        Text(dbName, style = MaterialTheme.typography.titleMedium)
+                                        Text("Clique para listar tabelas", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -166,8 +215,7 @@ fun DatabaseListScreen(navController: NavController, conexaoId: Int) {
     }
 }
 
-
-// Função de conexão (Sem alterações)
+// --- Função de conexão (inalterada)
 private fun connectToMySQL(url: String, port: String, dbName: String, user: String, pass: String): Connection {
     Class.forName("com.mysql.jdbc.Driver")
     val dbSegment = if (dbName.isNotBlank()) "/$dbName" else ""

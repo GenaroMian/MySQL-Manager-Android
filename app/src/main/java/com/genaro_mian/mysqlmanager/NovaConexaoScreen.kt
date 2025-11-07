@@ -6,11 +6,19 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Cloud
+import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import kotlinx.coroutines.Dispatchers
@@ -23,10 +31,12 @@ import java.sql.DriverManager
 @Composable
 fun NovaConexaoScreen(
     navController: NavController,
-    conexaoId: Int // <-- 1. RECEBENDO O ID DA NAVEGAÇÃO
+    conexaoId: Int
 ) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val conexaoDao = AppDatabase.getDatabase(context).conexaoDao()
 
-    // --- Estados para os campos de texto ---
     var alias by remember { mutableStateOf("") }
     var url by remember { mutableStateOf("") }
     var port by remember { mutableStateOf("3306") }
@@ -35,60 +45,43 @@ fun NovaConexaoScreen(
     var password by remember { mutableStateOf("") }
     var isLoading by remember { mutableStateOf(false) }
 
-    // --- Ferramentas ---
-    val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-    val conexaoDao = AppDatabase.getDatabase(context).conexaoDao()
-
-    // --- Lógica de Edição ---
     val isEditing = conexaoId != 0
     val screenTitle = if (isEditing) "Editar Conexão" else "Nova Conexão"
 
-    // --- 2. LÓGICA DE CARREGAMENTO (SE ESTIVER EDITANDO) ---
-    LaunchedEffect(key1 = conexaoId) {
+    // --- Carregar conexão existente ---
+    LaunchedEffect(conexaoId) {
         if (isEditing) {
-            // Mostra um "loading" rápido enquanto busca
             isLoading = true
-            // Busca os dados no banco Room (fora da thread principal)
             val conexaoSalva = withContext(Dispatchers.IO) {
                 conexaoDao.getConexaoPeloId(conexaoId)
             }
-
-            // Preenche os campos de texto
-            if (conexaoSalva != null) {
-                alias = conexaoSalva.alias
-                url = conexaoSalva.url
-                port = conexaoSalva.port
-                dbName = conexaoSalva.dbName
-                user = conexaoSalva.user
-                password = conexaoSalva.pass // Usando 'pass'
+            conexaoSalva?.let {
+                alias = it.alias
+                url = it.url
+                port = it.port
+                dbName = it.dbName
+                user = it.user
+                password = it.pass
             }
-            isLoading = false // Esconde o loading
+            isLoading = false
         }
     }
 
-    // --- Lógica de Validação (A mesma de antes) ---
-    val isFormValid = alias.isNotBlank() &&
-            url.isNotBlank() &&
-            port.isNotBlank() &&
-            user.isNotBlank() &&
-            password.isNotBlank()
+    val isFormValid = alias.isNotBlank() && url.isNotBlank() && port.isNotBlank() && user.isNotBlank() && password.isNotBlank()
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(screenTitle) }, // Título dinâmico
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    titleContentColor = MaterialTheme.colorScheme.onPrimary
-                ),
+                title = {
+                    Text(
+                        screenTitle,
+                        style = MaterialTheme.typography.titleLarge.copy(color = MaterialTheme.colorScheme.onPrimary)
+                    )
+                },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.primary),
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(
-                            imageVector = Icons.Default.ArrowBack,
-                            contentDescription = "Voltar",
-                            tint = MaterialTheme.colorScheme.onPrimary
-                        )
+                        Icon(Icons.Default.ArrowBack, contentDescription = "Voltar", tint = MaterialTheme.colorScheme.onPrimary)
                     }
                 }
             )
@@ -98,22 +91,44 @@ fun NovaConexaoScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .padding(16.dp)
-                .verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
 
-            // --- Campos de Texto (mesmos de antes) ---
-            OutlinedTextField(value = alias, onValueChange = { alias = it }, label = { Text("Apelido (Alias)") }, modifier = Modifier.fillMaxWidth(), readOnly = isLoading)
-            OutlinedTextField(value = url, onValueChange = { url = it }, label = { Text("URL (IP ou Domínio)") }, modifier = Modifier.fillMaxWidth(), readOnly = isLoading)
-            OutlinedTextField(value = port, onValueChange = { port = it }, label = { Text("Porta") }, modifier = Modifier.fillMaxWidth(), readOnly = isLoading)
-            OutlinedTextField(value = dbName, onValueChange = { dbName = it }, label = { Text("Nome do Banco (Opcional)") }, modifier = Modifier.fillMaxWidth(), readOnly = isLoading)
-            OutlinedTextField(value = user, onValueChange = { user = it }, label = { Text("Usuário") }, modifier = Modifier.fillMaxWidth(), readOnly = isLoading)
-            OutlinedTextField(value = password, onValueChange = { password = it }, label = { Text("Senha") }, visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth(), readOnly = isLoading)
+            Text(
+                "Configuração de Conexão",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.primary
+            )
 
-            Spacer(modifier = Modifier.height(16.dp))
+            ElevatedCard(
+                modifier = Modifier.fillMaxWidth(),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    // Campos de texto com ícones e labels
+                    StyledInputField(value = alias, onValueChange = { alias = it }, label = "Apelido", leadingIcon = Icons.Default.Storage)
+                    StyledInputField(value = url, onValueChange = { url = it }, label = "Endereço IP ou Domínio", leadingIcon = Icons.Default.Cloud)
+                    StyledInputField(value = port, onValueChange = { port = it }, label = "Porta", leadingIcon = Icons.Default.Settings)
+                    StyledInputField(value = dbName, onValueChange = { dbName = it }, label = "Nome do Banco (opcional)", leadingIcon = Icons.Default.Folder)
+                    StyledInputField(value = user, onValueChange = { user = it }, label = "Usuário", leadingIcon = Icons.Default.Person)
+                    StyledInputField(
+                        value = password,
+                        onValueChange = { password = it },
+                        label = "Senha",
+                        isPassword = true,
+                        leadingIcon = Icons.Default.Lock
+                    )
+                }
+            }
 
-            // --- Botão TESTAR (mesmo de antes) ---
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Botão de teste de conexão
             Button(
                 onClick = {
                     isLoading = true
@@ -123,10 +138,9 @@ fun NovaConexaoScreen(
                             connection.close()
                             withContext(Dispatchers.Main) {
                                 isLoading = false
-                                Toast.makeText(context, "Sucesso! Conexão OK.", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, "✅ Conexão bem-sucedida!", Toast.LENGTH_SHORT).show()
                             }
                         } catch (e: Exception) {
-                            e.printStackTrace()
                             withContext(Dispatchers.Main) {
                                 isLoading = false
                                 Toast.makeText(context, "Erro: ${e.message}", Toast.LENGTH_LONG).show()
@@ -135,25 +149,24 @@ fun NovaConexaoScreen(
                     }
                 },
                 modifier = Modifier.fillMaxWidth(),
-                enabled = isFormValid && !isLoading
+                enabled = isFormValid && !isLoading,
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
             ) {
                 if (isLoading) {
                     CircularProgressIndicator(
-                        modifier = Modifier.size(24.dp),
-                        color = MaterialTheme.colorScheme.onPrimary
+                        modifier = Modifier.size(22.dp),
+                        color = MaterialTheme.colorScheme.onPrimary,
+                        strokeWidth = 2.dp
                     )
                 } else {
                     Text("TESTAR CONEXÃO")
                 }
             }
 
-            // --- 3. LÓGICA DE SALVAR/ATUALIZAR ---
+            // Botão de salvar
             Button(
                 onClick = {
-                    // Cria o objeto para salvar
                     val conexaoParaSalvar = ConexaoSalva(
-                        // Se estiver editando, passa o ID original.
-                        // Se for novo, passa 0 (e o Room gera um novo ID).
                         id = if (isEditing) conexaoId else 0,
                         alias = alias,
                         url = url,
@@ -162,29 +175,51 @@ fun NovaConexaoScreen(
                         user = user,
                         pass = password
                     )
-
                     scope.launch(Dispatchers.IO) {
-                        // O DAO vai fazer "REPLACE" (Update) se o ID já existir
-                        // ou "INSERT" se o ID for 0.
                         conexaoDao.inserir(conexaoParaSalvar)
-
                         withContext(Dispatchers.Main) {
-                            Toast.makeText(context, "Conexão salva!", Toast.LENGTH_SHORT).show()
-                            navController.popBackStack() // Volta para a MainScreen
+                            Toast.makeText(context, "💾 Conexão salva com sucesso!", Toast.LENGTH_SHORT).show()
+                            navController.popBackStack()
                         }
                     }
                 },
                 modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.secondary
-                ),
-                enabled = isFormValid && !isLoading
+                enabled = isFormValid && !isLoading,
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
             ) {
-                Text("SALVAR")
+                Text("SALVAR CONEXÃO")
             }
         }
     }
 }
+
+// 🔹 Campo reutilizável estilizado
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun StyledInputField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    label: String,
+    leadingIcon: ImageVector,
+    isPassword: Boolean = false
+) {
+    OutlinedTextField(
+        value = value,
+        onValueChange = onValueChange,
+        label = { Text(label) },
+        singleLine = true,
+        leadingIcon = { Icon(leadingIcon, null, tint = MaterialTheme.colorScheme.primary) },
+        visualTransformation = if (isPassword) PasswordVisualTransformation() else VisualTransformation.None,
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.medium,
+        colors = OutlinedTextFieldDefaults.colors(
+            focusedBorderColor = MaterialTheme.colorScheme.primary,
+            unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
+            cursorColor = MaterialTheme.colorScheme.primary
+        )
+    )
+}
+
 
 
 // --- Função de Conexão (A mesma de antes) ---

@@ -1,6 +1,8 @@
 package com.genaro_mian.mysqlmanager // (Seu pacote)
 
 import android.widget.Toast
+import androidx.compose.foundation.BorderStroke // <-- NOVO IMPORT
+import androidx.compose.foundation.background // <-- NOVO IMPORT
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -10,9 +12,12 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Error
+import androidx.compose.material.icons.filled.List // <-- NOVO IMPORT
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Warning // <-- NOVO IMPORT
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment // <-- NOVO IMPORT
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -40,16 +45,9 @@ import java.sql.DriverManager
 import java.sql.ResultSet
 import java.util.regex.Pattern
 
-// --- LÓGICA DO SYNTAX HIGHLIGHTER (Sem alterações) ---
-private val colorKeyword = Color(0xFF0033B1)
-private val colorString = Color(0xFF067D17)
-private val colorNumber = Color(0xFF1A5AF3)
-private val colorComment = Color(0xFF808080)
-private val styleKeyword = SpanStyle(color = colorKeyword, fontWeight = FontWeight.Bold)
-private val styleString = SpanStyle(color = colorString)
-private val styleNumber = SpanStyle(color = colorNumber)
-private val styleComment = SpanStyle(color = colorComment)
-private val styleNormal = SpanStyle(color = Color.Black)
+// --- LÓGICA DO SYNTAX HIGHLIGHTER (Atualizada para "Theme-Aware") ---
+
+// 1. As Regras (Regex) (Sem alterações)
 private val keywords = setOf(
     "SELECT", "FROM", "WHERE", "INSERT", "INTO", "VALUES", "UPDATE", "SET", "DELETE",
     "CREATE", "TABLE", "DATABASE", "DROP", "ALTER", "ADD", "PRIMARY", "KEY", "FOREIGN",
@@ -58,13 +56,23 @@ private val keywords = setOf(
     "LIMIT", "SHOW", "TABLES", "DATABASES", "USE", "GRANT", "ALL", "PRIVILEGES", "WITH", "OPTION"
 )
 private val sqlPattern = Pattern.compile(
-    "(?i)(${keywords.joinToString("|")})|" + // Grupo 1
-            "('[^']*'|\"[^\"]*\")|" +              // Grupo 2
-            "(\\b\\d+\\b)|" +                      // Grupo 3
-            "(--[^\n]*)"                          // Grupo 4
+    "(?i)(${keywords.joinToString("|")})|" + // Grupo 1: Palavras-chave
+            "('[^']*'|\"[^\"]*\")|" +              // Grupo 2: Strings
+            "(\\b\\d+\\b)|" +                      // Grupo 3: Números
+            "(--[^\n]*)"                          // Grupo 4: Comentários
 )
 
+// 2. O Transformador Visual (Agora é @Composable para aceder ao Tema)
+@Composable
 private fun sqlSyntaxHighlighterWithUppercase(): VisualTransformation {
+
+    // **MUDANÇA: Cores agora usam o MaterialTheme**
+    val styleKeyword = SpanStyle(color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+    val styleString = SpanStyle(color = MaterialTheme.colorScheme.tertiary)
+    val styleNumber = SpanStyle(color = MaterialTheme.colorScheme.secondary)
+    val styleComment = SpanStyle(color = MaterialTheme.colorScheme.outline, fontWeight = FontWeight.Light)
+    val styleNormal = SpanStyle(color = MaterialTheme.colorScheme.onSurface)
+
     return VisualTransformation { text ->
         val annotatedString = buildAnnotatedString {
             val matcher = sqlPattern.matcher(text.text)
@@ -106,7 +114,7 @@ private fun sqlSyntaxHighlighterWithUppercase(): VisualTransformation {
 }
 
 
-// --- A TELA DO TERMINAL (Com Correção de "Colar") ---
+// --- A TELA DO TERMINAL (Design Upgrade) ---
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TerminalScreen(
@@ -140,7 +148,17 @@ fun TerminalScreen(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
-                title = { Text("Terminal (${conexaoSalva?.alias} / $dbName)") },
+                // **MUDANÇA: Título com Hierarquia**
+                title = {
+                    Column {
+                        Text("Terminal SQL")
+                        Text(
+                            text = "${conexaoSalva?.alias ?: "..."} / $dbName",
+                            style = MaterialTheme.typography.bodySmall, // Subtítulo
+                            color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.8f) // Cor subtil
+                        )
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.primary,
                     titleContentColor = MaterialTheme.colorScheme.onPrimary
@@ -212,131 +230,141 @@ fun TerminalScreen(
         }
     ) { innerPadding ->
 
-        // Editor com Números de Linha
-        val lineCount = remember(sqlQuery.text) {
-            sqlQuery.text.count { it == '\n' } + 1
-        }
-
-        val editorTextStyle = TextStyle(
-            fontFamily = FontFamily.Monospace,
-            fontSize = 16.sp
-        )
-
-        Row(
+        // **MUDANÇA: O "COMPONENTE" DO EDITOR**
+        // 1. O 'Surface' cria a "contenção" (borda, sombra, cantos arredondados)
+        Surface(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
+                .padding(8.dp), // Espaço à volta do editor
+            shape = MaterialTheme.shapes.medium,
+            //elevation = 2.dp,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
         ) {
-            // 1. A CALHA (GUTTER) DE NÚMEROS DE LINHA
-            Text(
-                text = (1..lineCount).joinToString("\n"),
-                modifier = Modifier
-                    .fillMaxHeight()
-                    .width(40.dp)
-                    .padding(top = 16.dp, start = 8.dp),
-                textAlign = TextAlign.End,
-                style = editorTextStyle.copy(color = Color.Gray)
+
+            // Editor com Números de Linha
+            val lineCount = remember(sqlQuery.text) {
+                sqlQuery.text.count { it == '\n' } + 1
+            }
+
+            val editorTextStyle = TextStyle(
+                fontFamily = FontFamily.Monospace,
+                fontSize = 16.sp
             )
 
-            // 2. O EDITOR DE TEXTO REAL
-            BasicTextField(
-                value = sqlQuery,
-
-                // **MUDANÇA AQUI: LÓGICA DE "COLAR" CORRIGIDA**
-                onValueChange = { newValue ->
-                    val oldText = sqlQuery.text
-                    val newText = newValue.text
-
-                    // **A CORREÇÃO (GUARDA):**
-                    // Se a mudança NÃO foi de 1 carácter (é uma colagem ou deleção),
-                    // apenas aceite o novo valor e não faça a "magia".
-                    if (newText.length != oldText.length + 1) {
-                        sqlQuery = newValue
-                        return@BasicTextField
-                    }
-
-                    // Se chegámos aqui, foi uma digitação de 1 carácter.
-                    // Podemos fazer a nossa "magia" de auto-completar:
-
-                    val typedCharIndex = newValue.selection.start - 1
-
-                    // Caso 1: Auto-completar parênteses
-                    if (typedCharIndex >= 0) {
-                        val typedChar = newText[typedCharIndex]
-                        if (typedChar == '(') {
-                            val textBefore = newText.substring(0, newValue.selection.start)
-                            val textAfter = newText.substring(newValue.selection.start)
-                            val finalText = textBefore + ")" + textAfter
-                            sqlQuery = newValue.copy(
-                                text = finalText,
-                                selection = TextRange(newValue.selection.start)
-                            )
-                            return@BasicTextField
-                        }
-                    }
-
-                    // Caso 2: Auto-indentar com "Enter"
-                    if (newText.length > oldText.length && newText.count { it == '\n' } > oldText.count { it == '\n' }) {
-                        val enterIndex = newValue.selection.start - 1
-                        if (enterIndex >= 0) {
-                            val lineStartIndex = oldText.lastIndexOf('\n', enterIndex - 1) + 1
-                            val lineText = oldText.substring(lineStartIndex, enterIndex)
-                            val charBeforeEnter = lineText.trimEnd().lastOrNull()
-
-                            val textBefore = newText.substring(0, newValue.selection.start)
-                            val textAfter = newText.substring(newValue.selection.start)
-
-                            // 2a: Indentação "Sanduíche"
-                            if (charBeforeEnter == '(') {
-                                val indent = "    "
-                                val finalText = textBefore + indent + "\n" + textAfter
-                                val newCursorPos = newValue.selection.start + indent.length
-
-                                sqlQuery = newValue.copy(
-                                    text = finalText,
-                                    selection = TextRange(newCursorPos)
-                                )
-                                return@BasicTextField
-                            }
-
-                            // 2b: Indentação "Persistente"
-                            val currentIndentation = lineText.takeWhile { it.isWhitespace() }
-                            if (currentIndentation.isNotEmpty()) {
-                                val finalText = textBefore + currentIndentation + textAfter
-                                val newCursorPos = newValue.selection.start + currentIndentation.length
-
-                                sqlQuery = newValue.copy(
-                                    text = finalText,
-                                    selection = TextRange(newCursorPos)
-                                )
-                                return@BasicTextField
-                            }
-                        }
-                    }
-
-                    // Caso 3: Padrão (apenas aceita a mudança)
-                    sqlQuery = newValue
-                },
-
-                visualTransformation = sqlSyntaxHighlighterWithUppercase(),
-                textStyle = editorTextStyle.copy(color = Color.Black),
+            Row(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(top = 16.dp, end = 16.dp, start = 8.dp)
-            )
-        }
+            ) {
+                // 2. A CALHA (GUTTER) (Agora com fundo e padding corretos)
+                Text(
+                    text = (1..lineCount).joinToString("\n"),
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .width(48.dp) // Um pouco mais largo
+                        .background(MaterialTheme.colorScheme.surfaceVariant) // Fundo cinza
+                        .padding(horizontal = 8.dp, vertical = 16.dp), // Padding vertical
+                    textAlign = TextAlign.End,
+                    style = editorTextStyle.copy(
+                        color = MaterialTheme.colorScheme.onSurfaceVariant // Cor do texto da calha
+                    )
+                )
 
-        // Gavetas de Resultados (Sem alterações)
+                // 3. O EDITOR DE TEXTO REAL
+                BasicTextField(
+                    value = sqlQuery,
+                    onValueChange = { newValue ->
+                        // (Toda a nossa lógica de auto-indentação e parênteses)
+                        val oldText = sqlQuery.text
+                        val newText = newValue.text
+                        if (newText.length != oldText.length + 1) {
+                            sqlQuery = newValue
+                            return@BasicTextField
+                        }
+                        val typedCharIndex = newValue.selection.start - 1
+                        if (typedCharIndex >= 0) {
+                            val typedChar = newText[typedCharIndex]
+                            if (typedChar == '(') {
+                                val textBefore = newText.substring(0, newValue.selection.start)
+                                val textAfter = newText.substring(newValue.selection.start)
+                                val finalText = textBefore + ")" + textAfter
+                                sqlQuery = newValue.copy(
+                                    text = finalText,
+                                    selection = TextRange(newValue.selection.start)
+                                )
+                                return@BasicTextField
+                            }
+                        }
+                        if (newText.length > oldText.length && newText.count { it == '\n' } > oldText.count { it == '\n' }) {
+                            val enterIndex = newValue.selection.start - 1
+                            if (enterIndex >= 0) {
+                                val lineStartIndex = oldText.lastIndexOf('\n', enterIndex - 1) + 1
+                                val lineText = oldText.substring(lineStartIndex, enterIndex)
+                                val charBeforeEnter = lineText.trimEnd().lastOrNull()
+                                val textBefore = newText.substring(0, newValue.selection.start)
+                                val textAfter = newText.substring(newValue.selection.start)
+                                if (charBeforeEnter == '(') {
+                                    val indent = "    "
+                                    val finalText = textBefore + indent + "\n" + textAfter
+                                    val newCursorPos = newValue.selection.start + indent.length
+                                    sqlQuery = newValue.copy(
+                                        text = finalText,
+                                        selection = TextRange(newCursorPos)
+                                    )
+                                    return@BasicTextField
+                                }
+                                val currentIndentation = lineText.takeWhile { it.isWhitespace() }
+                                if (currentIndentation.isNotEmpty()) {
+                                    val finalText = textBefore + currentIndentation + textAfter
+                                    val newCursorPos = newValue.selection.start + currentIndentation.length
+                                    sqlQuery = newValue.copy(
+                                        text = finalText,
+                                        selection = TextRange(newCursorPos)
+                                    )
+                                    return@BasicTextField
+                                }
+                            }
+                        }
+                        sqlQuery = newValue
+                    },
+
+                    visualTransformation = sqlSyntaxHighlighterWithUppercase(),
+                    textStyle = editorTextStyle.copy(
+                        color = MaterialTheme.colorScheme.onSurface // Cor do texto
+                    ),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(MaterialTheme.colorScheme.surface) // Fundo branco
+                        .padding(top = 16.dp, end = 16.dp, start = 12.dp) // Padding interno
+                )
+            }
+        } // Fim do Surface
+
+        // --- Gavetas de Resultados (Com Ícones) ---
         if (showResultSheet) {
             ModalBottomSheet(onDismissRequest = { showResultSheet = false }) {
-                Text("Resultados do SELECT", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(16.dp))
+                // **MUDANÇA: Adicionado Row com Ícone**
+                Row(
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(Icons.Default.List, contentDescription = null, modifier = Modifier.padding(end = 8.dp))
+                    Text("Resultados do SELECT", style = MaterialTheme.typography.titleMedium)
+                }
                 DataTable(result = resultData)
                 Spacer(modifier = Modifier.height(32.dp))
             }
         }
         if (showErrorSheet) {
             ModalBottomSheet(onDismissRequest = { showErrorSheet = false }) {
-                Text("Erro na Query", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(16.dp), color = MaterialTheme.colorScheme.error)
+                // **MUDANÇA: Adicionado Row com Ícone**
+                Row(
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(Icons.Default.Warning, contentDescription = null, modifier = Modifier.padding(end = 8.dp), tint = MaterialTheme.colorScheme.error)
+                    Text("Erro na Query", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.error)
+                }
                 Text(errorMessage, modifier = Modifier.padding(16.dp))
                 Spacer(modifier = Modifier.height(32.dp))
             }
